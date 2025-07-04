@@ -3,7 +3,10 @@ import pickle
 import pandas as pd
 import requests
 
-# Helper functions to download large files from Google Drive
+# Fix Streamlit CORS warning on Render
+st.set_page_config(page_title="Movie Recommender")
+
+# Helper functions for Google Drive direct download
 def get_confirm_token(response):
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
@@ -21,7 +24,14 @@ def load_pickle_from_gdrive(file_id):
         params = {'id': file_id, 'confirm': token}
         response = session.get(URL, params=params, stream=True)
 
-    return pickle.loads(response.content)
+    content = response.content
+
+    # Debug: check if content is HTML, which means not a raw pickle file
+    if content.startswith(b'<'):
+        st.error("Error: Downloaded content looks like an HTML page, not a pickle file. Check Google Drive sharing & file ID.")
+        st.stop()  # stop app execution
+
+    return pickle.loads(content)
 
 # Your Google Drive file ID for similarity.pkl
 file_id = '1KBJC5uqYZK0nTJQDRoY9ZIGJdQk3Oi-a'

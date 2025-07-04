@@ -3,17 +3,31 @@ import pickle
 import pandas as pd
 import requests
 
-# --- Load similarity.pkl from Google Drive ---
-def load_similarity_from_drive(file_id):
-    url = f'https://drive.google.com/uc?id={file_id}'
-    response = requests.get(url)
+# Helper functions to download large files from Google Drive
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            return value
+    return None
+
+def load_pickle_from_gdrive(file_id):
+    URL = "https://docs.google.com/uc?export=download"
+    session = requests.Session()
+
+    response = session.get(URL, params={'id': file_id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {'id': file_id, 'confirm': token}
+        response = session.get(URL, params=params, stream=True)
+
     return pickle.loads(response.content)
 
-# ✅ Google Drive File ID (your actual file)
+# Your Google Drive file ID for similarity.pkl
 file_id = '1KBJC5uqYZK0nTJQDRoY9ZIGJdQk3Oi-a'
-similarity = load_similarity_from_drive(file_id)
+similarity = load_pickle_from_gdrive(file_id)
 
-# --- Fetch movie poster from TMDB ---
+# Function to fetch movie posters from TMDB API
 def fetch_poster(movie_id):
     response = requests.get(
         f"https://api.themoviedb.org/3/movie/{movie_id}?api_key=a795623f41e9619b1a3a8aa65dfe92a0&language=en-US"
@@ -21,13 +35,11 @@ def fetch_poster(movie_id):
     data = response.json()
     return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
 
-# --- Recommend similar movies ---
+# Recommend function using similarity matrix
 def recommend(movie):
     movie_index = movies[movies['title'] == movie].index[0]
     distances = similarity[movie_index]
-    movie_list = sorted(
-        list(enumerate(distances)), reverse=True, key=lambda x: x[1]
-    )[1:6]
+    movie_list = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
 
     recommended_movies = []
     recommended_posters = []
@@ -37,11 +49,11 @@ def recommend(movie):
         recommended_posters.append(fetch_poster(movie_id))
     return recommended_movies, recommended_posters
 
-# --- Load movies data (local file) ---
+# Load movies dictionary from local pickle file (small file)
 movies_dict = pickle.load(open('movie_dict.pkl', 'rb'))
 movies = pd.DataFrame(movies_dict)
 
-# --- Streamlit UI ---
+# Streamlit UI
 st.title("🎬 Movie Recommender System")
 
 selected_movie_name = st.selectbox(
